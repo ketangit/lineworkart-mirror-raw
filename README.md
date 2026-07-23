@@ -38,12 +38,13 @@ generator ─▶ PathSet ─▶ modifier… ─▶ PathSet ─▶ ┬─▶ rend
 | Area | Files | Notes |
 | --- | --- | --- |
 | Geometry | `src/core/geometry.ts` | `Point` / `Path` / `PathSet`, bounds, metrics (paths · samples · pen-ups · length) |
+| Noise | `src/core/noise.ts` | Shared deterministic value noise |
 | Registry | `src/core/registry.ts` | Generator/modifier registration + **field schema** |
 | Document | `src/core/document.ts` | Page + layer stack, lazy evaluation |
 | History | `src/core/history.ts` | Generic undo/redo stack (editor stores document snapshots) |
 | Renderer | `src/core/renderer.ts` | `PathSet` → live `<svg>` with a mm `viewBox` |
 | Export | `src/core/export/svg.ts`, `gcode.ts` | SVG (mm), G-code with device profiles + travel optimisation |
-| Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field`, `truchet` |
+| Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field`, `truchet`, `halftone` |
 | Modifiers | `src/modifiers/*` | `jitter`, `dash`, `warp` |
 | UI | `src/ui/*`, `src/main.ts` | Three-column shell; layer panel; undo/redo; controls auto-built from field schemas |
 
@@ -79,8 +80,9 @@ distilled from.
 
 Four active tracks:
 
-1. **Generators / modifiers** — flow-field, truchet, warp (done); next:
-   halftone, text-on-path, 3D projection; boolean-clip modifier.
+1. **Generators / modifiers** — flow-field, truchet, halftone, warp (done);
+   next: text-on-path (needs a single-line font), 3D projection; boolean-clip
+   modifier.
 2. **Export & device output** — more plotter/CNC profiles, per-layer pen
    mapping, HPGL, path-merge to further cut pen-ups.
 3. **UX / design polish** — layer panel, undo/redo (coalesced) with ⌘Z/⌘⇧Z
