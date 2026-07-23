@@ -6,8 +6,8 @@
  */
 
 import type { Path, PathSet } from "../geometry";
-import type { EvaluatedLayer } from "../document";
-import type { PageSize } from "../document";
+import type { EvaluatedLayer, PageSize } from "../document";
+import { penGroups } from "../document";
 
 /** Round to a sane precision to keep files small. */
 function n(value: number): number {
@@ -50,20 +50,29 @@ export function toSVG(
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" ` +
+      `xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" ` +
       `width="${w}mm" height="${h}mm" viewBox="0 0 ${w} ${h}">`,
   );
   if (opts.background) {
     parts.push(`<rect width="${w}" height="${h}" fill="${opts.background}"/>`);
   }
-  for (const { layer, paths } of layers) {
-    const d = pathSetData(paths);
-    if (!d) continue;
+  // One Inkscape/AxiDraw "layer" group per pen so plotter software can plot
+  // each pen as a separate pass.
+  for (const { pen, layers: penLayers } of penGroups(layers)) {
     parts.push(
-      `<path d="${d}" fill="none" stroke="${layer.strokeColor}" ` +
-        `stroke-width="${n(layer.strokeWidth)}" ` +
-        `stroke-linecap="round" stroke-linejoin="round" ` +
-        `data-layer="${escapeAttr(layer.name)}"/>`,
+      `<g inkscape:groupmode="layer" inkscape:label="Pen ${pen}" data-pen="${pen}">`,
     );
+    for (const { layer, paths } of penLayers) {
+      const d = pathSetData(paths);
+      if (!d) continue;
+      parts.push(
+        `  <path d="${d}" fill="none" stroke="${layer.strokeColor}" ` +
+          `stroke-width="${n(layer.strokeWidth)}" ` +
+          `stroke-linecap="round" stroke-linejoin="round" ` +
+          `data-layer="${escapeAttr(layer.name)}"/>`,
+      );
+    }
+    parts.push(`</g>`);
   }
   if (opts.pageBorder) {
     parts.push(
