@@ -28,6 +28,8 @@ export interface Layer {
   modifiers: ModifierInstance[];
   strokeColor: string;
   strokeWidth: number; // mm
+  /** 1-based pen/tool this layer plots with (for multi-pen output). */
+  pen: number;
   visible: boolean;
   locked: boolean;
   /** Centre the generated line-work on the page. */
@@ -67,6 +69,7 @@ export function createLayer(generatorId: string, name?: string): Layer {
     modifiers: [],
     strokeColor: "#e85b4f",
     strokeWidth: 0.2,
+    pen: 1,
     visible: true,
     locked: false,
     center: true,
@@ -123,4 +126,30 @@ export function evaluateDocument(doc: Document): EvaluatedLayer[] {
   return doc.layers
     .filter((l) => l.visible)
     .map((layer) => ({ layer, paths: evaluateLayer(layer, doc.page) }));
+}
+
+export interface PenGroup {
+  pen: number;
+  layers: EvaluatedLayer[];
+}
+
+/**
+ * Bucket evaluated layers by their pen, ascending. Layers keep their draw
+ * order within a pen. This is what multi-pen output iterates over — one pass
+ * (or pen change) per group.
+ */
+export function penGroups(evaluated: EvaluatedLayer[]): PenGroup[] {
+  const map = new Map<number, EvaluatedLayer[]>();
+  for (const el of evaluated) {
+    const pen = el.layer.pen ?? 1;
+    let bucket = map.get(pen);
+    if (!bucket) {
+      bucket = [];
+      map.set(pen, bucket);
+    }
+    bucket.push(el);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([pen, layers]) => ({ pen, layers }));
 }
