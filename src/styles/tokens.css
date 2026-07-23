@@ -1,0 +1,119 @@
+/*
+ * Design tokens — "technical atelier" system.
+ * Warm paper, graphite ink, monospaced instrument readouts, a pine-green
+ * workspace accent, and three signal colors. Light + dark aware.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces */
+  --bg: #f6f6f3;
+  --bg-line: #d9d9d3;
+  --shell: #ffffff;
+  --shell-2: #fbfbf8;
+  --shell-edge: #d8d8d1;
+  --module: #ffffff;
+  --module-2: #f7f7f3;
+  --module-border: #d7d7d0;
+
+  /* Paper (the canvas media) */
+  --paper: #fdfdfb;
+  --paper-2: #f6f6f2;
+  --paper-edge: #ecece6;
+  --paper-shadow: rgba(20, 20, 19, 0.08);
+
+  /* Ink */
+  --ink: #131313;
+  --muted: #6b6b66;
+  --graphite: #1f1f1d;
+
+  /* Signal accents */
+  --signal-yellow: #f2d34f;
+  --signal-orange: #f47a2a;
+  --signal-green: #2fa765;
+
+  /* Workspace accent (pine) */
+  --accent-rgb: 15, 106, 84;
+  --accent: rgb(var(--accent-rgb));
+  --accent-ink: #1c312c;
+  --accent-soft: rgba(var(--accent-rgb), 0.08);
+  --accent-border: rgba(var(--accent-rgb), 0.16);
+  --button: #26473f;
+  --button-2: #17352e;
+  --button-text: #ffffff;
+
+  /* Default stroke color for new line-work */
+  --stroke-color: #e85b4f;
+
+  /* Type */
+  --font-ui: "Helvetica Neue", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-data: "SF Mono", "Menlo", "Monaco", ui-monospace, monospace;
+
+  /* Shape */
+  --radius-panel: 14px;
+  --radius-module: 10px;
+  --radius-soft: 7px;
+  --shadow-panel: 0 8px 22px rgba(20, 20, 19, 0.06);
+  --shadow-module: 0 3px 10px rgba(20, 20, 19, 0.04);
+
+  /* Rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Controls */
+  --track-h: 4px;
+  --thumb-size: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14140f;
+    --bg-line: #23231d;
+    --shell: #1b1b16;
+    --shell-2: #191914;
+    --shell-edge: #2a2a22;
+    --module: #1e1e18;
+    --module-2: #1a1a14;
+    --module-border: #2c2c24;
+    --paper: #121210;
+    --paper-2: #17170f;
+    --paper-edge: #26261d;
+    --paper-shadow: rgba(0, 0, 0, 0.4);
+    --ink: #ecebe3;
+    --muted: #9a978c;
+    --graphite: #d8d6cc;
+    --accent-ink: #b7d8cc;
+    --button: #2f5b50;
+    --button-2: #1d3b33;
+    --shadow-panel: 0 8px 22px rgba(0, 0, 0, 0.5);
+    --shadow-module: 0 3px 10px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #14140f;
+  --bg-line: #23231d;
+  --shell: #1b1b16;
+  --shell-2: #191914;
+  --shell-edge: #2a2a22;
+  --module: #1e1e18;
+  --module-2: #1a1a14;
+  --module-border: #2c2c24;
+  --paper: #121210;
+  --paper-2: #17170f;
+  --paper-edge: #26261d;
+  --paper-shadow: rgba(0, 0, 0, 0.4);
+  --ink: #ecebe3;
+  --muted: #9a978c;
+  --graphite: #d8d6cc;
+  --accent-ink: #b7d8cc;
+  --button: #2f5b50;
+  --button-2: #1d3b33;
+  --shadow-panel: 0 8px 22px rgba(0, 0, 0, 0.5);
+  --shadow-module: 0 3px 10px rgba(0, 0, 0, 0.4);
+}
