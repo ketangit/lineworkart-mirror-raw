@@ -28,8 +28,10 @@ import {
 import { metrics } from "./core/geometry";
 import { History } from "./core/history";
 import { renderInto, fitScale } from "./core/renderer";
+import { mergePaths } from "./core/path-merge";
 import { toSVG } from "./core/export/svg";
 import { toGcodePens, optimizeOrder, GCODE_PROFILES } from "./core/export/gcode";
+import { toHPGL } from "./core/export/hpgl";
 import { buildFields } from "./ui/controls";
 
 registerGenerators();
@@ -95,10 +97,14 @@ app.innerHTML = `
       <label class="field field--checkbox">
         <div class="field__row"><input type="checkbox" id="opt-pause" checked><span class="field__label">Pause between pens</span></div>
       </label>
+      <label class="field field--checkbox">
+        <div class="field__row"><input type="checkbox" id="opt-merge" checked><span class="field__label">Merge touching paths</span></div>
+      </label>
 
       <div class="export-row">
         <button class="btn btn--block" id="export-svg">Export SVG</button>
         <button class="btn btn--block" id="export-gcode">Export G-code</button>
+        <button class="btn btn--block" id="export-hpgl">Export HPGL</button>
       </div>
     </div>
   </aside>
@@ -559,22 +565,35 @@ for (const [id, profile] of Object.entries(GCODE_PROFILES)) {
 
 const isChecked = (id: string): boolean => (document.getElementById(id) as HTMLInputElement).checked;
 
+const maybeMerge = (paths: ReturnType<typeof evaluateDocument>[number]["paths"]) =>
+  isChecked("opt-merge") ? mergePaths(paths) : paths;
+
+/** Pen groups with each pen's line-work flattened (and merged if enabled). */
+function penExportGroups(): { pen: number; paths: ReturnType<typeof mergePaths> }[] {
+  return penGroups(evaluateDocument(doc)).map((g) => ({
+    pen: g.pen,
+    paths: maybeMerge(g.layers.flatMap((l) => l.paths)),
+  }));
+}
+
 document.getElementById("export-svg")!.addEventListener("click", () => {
-  const svg = toSVG(evaluateDocument(doc), doc.page, { pageBorder: true });
+  const layers = evaluateDocument(doc).map((e) => ({ layer: e.layer, paths: maybeMerge(e.paths) }));
+  const svg = toSVG(layers, doc.page, { pageBorder: true });
   download("lineandform.svg", svg, "image/svg+xml");
 });
 
 document.getElementById("export-gcode")!.addEventListener("click", () => {
   const profile = GCODE_PROFILES[deviceSelect.value] ?? GCODE_PROFILES.servo!;
-  const groups = penGroups(evaluateDocument(doc)).map((g) => ({
-    pen: g.pen,
-    paths: g.layers.flatMap((l) => l.paths),
-  }));
-  const gcode = toGcodePens(groups, profile, {
+  const gcode = toGcodePens(penExportGroups(), profile, {
     optimize: isChecked("opt-optimize"),
     penPause: isChecked("opt-pause"),
   });
   download("lineandform.gcode", gcode, "text/plain");
+});
+
+document.getElementById("export-hpgl")!.addEventListener("click", () => {
+  const hpgl = toHPGL(penExportGroups(), doc.page.height, { optimize: isChecked("opt-optimize") });
+  download("lineandform.hpgl", hpgl, "text/plain");
 });
 
 function download(filename: string, content: string, mime: string): void {
