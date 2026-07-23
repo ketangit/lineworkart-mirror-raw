@@ -98,6 +98,7 @@ body {
 
 .verbs {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding: 0 var(--space-4) var(--space-4);
 }
@@ -136,6 +137,19 @@ body {
 .btn--block {
   width: 100%;
   text-align: center;
+}
+
+.btn--icon {
+  padding: 9px 0;
+  width: 38px;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.btn--icon:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ---- Field controls (auto-generated from schema) ---- */
