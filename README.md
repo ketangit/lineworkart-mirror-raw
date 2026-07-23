@@ -42,8 +42,8 @@ generator ─▶ PathSet ─▶ modifier… ─▶ PathSet ─▶ ┬─▶ rend
 | Document | `src/core/document.ts` | Page + layer stack, lazy evaluation |
 | Renderer | `src/core/renderer.ts` | `PathSet` → live `<svg>` with a mm `viewBox` |
 | Export | `src/core/export/svg.ts`, `gcode.ts` | SVG (mm), G-code with device profiles + travel optimisation |
-| Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field` |
-| Modifiers | `src/modifiers/*` | `jitter`, `dash` |
+| Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field`, `truchet` |
+| Modifiers | `src/modifiers/*` | `jitter`, `dash`, `warp` |
 | UI | `src/ui/*`, `src/main.ts` | Three-column shell; controls auto-built from field schemas |
 
 ### The key idea: field schemas
@@ -78,8 +78,8 @@ distilled from.
 
 Four active tracks:
 
-1. **Generators / modifiers** — flow-field (done); next: truchet, halftone,
-   text-on-path, 3D projection; boolean-clip and warp modifiers.
+1. **Generators / modifiers** — flow-field, truchet, warp (done); next:
+   halftone, text-on-path, 3D projection; boolean-clip modifier.
 2. **Export & device output** — more plotter/CNC profiles, per-layer pen
    mapping, HPGL, path-merge to further cut pen-ups.
 3. **UX / design polish** — layer panel with reorder/lock/visibility,
