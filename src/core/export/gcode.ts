@@ -1,9 +1,11 @@
 /**
- * G-code export for pen plotters / CNC. Two things beyond a naive dump:
+ * G-code export for pen plotters / CNC. Three things beyond a naive dump:
  *  - Device profiles describe how a given machine lifts and drops the pen
  *    (servo M-codes or a Z hop) plus feed rates and units.
  *  - `optimizeOrder` greedily reorders and flips paths (nearest-neighbour) to
  *    cut travel distance and, with it, the number of pen-up moves.
+ *  - `toGcodePens` emits one section per pen, optionally pausing for a manual
+ *    pen swap between them.
  */
 
 import type { Path, PathSet, Point } from "../geometry";
@@ -21,6 +23,8 @@ export interface GcodeProfile {
   penUpZ?: number;
   drawFeed: number; // mm/min
   travelFeed: number; // mm/min
+  /** Command that pauses for a manual pen change (e.g. "M0"). */
+  penChangeCmd: string;
   /** Extra lines emitted at start / end of the program. */
   preamble: string[];
   postamble: string[];
@@ -35,6 +39,7 @@ export const GCODE_PROFILES: Record<string, GcodeProfile> = {
     penUpCmd: "M5",
     drawFeed: 1500,
     travelFeed: 3000,
+    penChangeCmd: "M0",
     preamble: ["G21", "G90", "G17", "M5"],
     postamble: ["M5", "G0 X0 Y0"],
   },
@@ -46,8 +51,21 @@ export const GCODE_PROFILES: Record<string, GcodeProfile> = {
     penUpZ: 5,
     drawFeed: 1200,
     travelFeed: 2400,
+    penChangeCmd: "M0",
     preamble: ["G21", "G90", "G0 Z5"],
     postamble: ["G0 Z5", "G0 X0 Y0"],
+  },
+  grbl: {
+    id: "grbl",
+    name: "GRBL servo (M3/M5)",
+    penMode: "servo",
+    penDownCmd: "M3 S90",
+    penUpCmd: "M3 S20",
+    drawFeed: 2000,
+    travelFeed: 5000,
+    penChangeCmd: "M0",
+    preamble: ["G21", "G90", "M3 S20"],
+    postamble: ["M3 S20", "G0 X0 Y0", "M2"],
   },
 };
 
@@ -122,18 +140,26 @@ export function travelDistance(set: PathSet): number {
 
 export interface GcodeOptions {
   optimize?: boolean;
+  /** Pause (profile.penChangeCmd) between pens so the operator can swap. */
+  penPause?: boolean;
+}
+
+/** One pen's worth of line-work, in plot order. */
+export interface PenPaths {
+  pen: number;
+  paths: PathSet;
 }
 
 function num(v: number): string {
   return (Math.round(v * 1000) / 1000).toString();
 }
 
-export function toGcode(
-  input: PathSet,
+/** Multi-pen program: one section per pen, optional pause between them. */
+export function toGcodePens(
+  groups: PenPaths[],
   profile: GcodeProfile,
   opts: GcodeOptions = {},
 ): string {
-  const set = opts.optimize ? optimizeOrder(input).set : input;
   const lines: string[] = [];
   const penUp = () =>
     lines.push(profile.penMode === "servo" ? profile.penUpCmd! : `G0 Z${num(profile.penUpZ!)}`);
@@ -145,21 +171,42 @@ export function toGcode(
   lines.push(`; Line & Form — ${profile.name}`);
   lines.push(...profile.preamble);
 
-  for (const path of set) {
-    if (path.points.length === 0) continue;
-    const pts = path.closed
-      ? [...path.points, path.points[0]!]
-      : path.points;
-    const start = pts[0]!;
-    penUp();
-    lines.push(`G0 X${num(start.x)} Y${num(start.y)} F${profile.travelFeed}`);
-    penDown();
-    for (let i = 1; i < pts.length; i++) {
-      lines.push(`G1 X${num(pts[i]!.x)} Y${num(pts[i]!.y)} F${profile.drawFeed}`);
+  const ordered = [...groups].sort((a, b) => a.pen - b.pen);
+  ordered.forEach((group, gi) => {
+    const set = opts.optimize ? optimizeOrder(group.paths).set : group.paths;
+    if (set.every((p) => p.points.length === 0)) return;
+
+    if (gi > 0 && opts.penPause) {
+      penUp();
+      lines.push(`G0 X0 Y0 F${profile.travelFeed}`);
+      lines.push(`; change to pen ${group.pen}`);
+      lines.push(profile.penChangeCmd);
     }
-  }
+    lines.push(`; ---- pen ${group.pen} ----`);
+
+    for (const path of set) {
+      if (path.points.length === 0) continue;
+      const pts = path.closed ? [...path.points, path.points[0]!] : path.points;
+      const start = pts[0]!;
+      penUp();
+      lines.push(`G0 X${num(start.x)} Y${num(start.y)} F${profile.travelFeed}`);
+      penDown();
+      for (let i = 1; i < pts.length; i++) {
+        lines.push(`G1 X${num(pts[i]!.x)} Y${num(pts[i]!.y)} F${profile.drawFeed}`);
+      }
+    }
+  });
 
   penUp();
   lines.push(...profile.postamble);
   return lines.join("\n") + "\n";
+}
+
+/** Single-pen program — a thin wrapper over {@link toGcodePens}. */
+export function toGcode(
+  input: PathSet,
+  profile: GcodeProfile,
+  opts: GcodeOptions = {},
+): string {
+  return toGcodePens([{ pen: 1, paths: input }], profile, { optimize: opts.optimize });
 }
