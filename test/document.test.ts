@@ -4,6 +4,7 @@ import {
   createLayer,
   duplicateLayer,
   evaluateDocument,
+  penGroups,
   PAGE_SIZES,
 } from "../src/core/document";
 import { registerGenerators } from "../src/generators";
@@ -40,5 +41,20 @@ describe("document + layers", () => {
     doc.layers.push(createLayer("rose"));
     const evaluated = evaluateDocument(doc);
     expect(evaluated.map((e) => e.layer.generatorId)).toEqual(["spirograph", "rose"]);
+  });
+
+  it("buckets layers by pen, ascending, keeping draw order", () => {
+    const doc = createDocument("spirograph", PAGE_SIZES.a4!);
+    doc.layers[0]!.pen = 2;
+    const a = createLayer("rose");
+    a.pen = 1;
+    const b = createLayer("rose");
+    b.pen = 2;
+    doc.layers.push(a, b);
+    const groups = penGroups(evaluateDocument(doc));
+    expect(groups.map((g) => g.pen)).toEqual([1, 2]);
+    // pen 2 keeps its two layers in original draw order
+    expect(groups[1]!.layers).toHaveLength(2);
+    expect(groups[0]!.layers).toHaveLength(1);
   });
 });
