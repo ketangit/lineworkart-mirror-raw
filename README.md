@@ -44,7 +44,7 @@ generator ─▶ PathSet ─▶ modifier… ─▶ PathSet ─▶ ┬─▶ rend
 | Export | `src/core/export/svg.ts`, `gcode.ts` | SVG (mm), G-code with device profiles + travel optimisation |
 | Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field`, `truchet` |
 | Modifiers | `src/modifiers/*` | `jitter`, `dash`, `warp` |
-| UI | `src/ui/*`, `src/main.ts` | Three-column shell; controls auto-built from field schemas |
+| UI | `src/ui/*`, `src/main.ts` | Three-column shell; layer panel; controls auto-built from field schemas |
 
 ### The key idea: field schemas
 
@@ -82,8 +82,8 @@ Four active tracks:
    halftone, text-on-path, 3D projection; boolean-clip modifier.
 2. **Export & device output** — more plotter/CNC profiles, per-layer pen
    mapping, HPGL, path-merge to further cut pen-ups.
-3. **UX / design polish** — layer panel with reorder/lock/visibility,
-   undo/redo, keyboard shortcuts, gallery, mobile layout.
+3. **UX / design polish** — layer panel with reorder/lock/visibility/duplicate
+   (done); next: undo/redo, keyboard shortcuts, gallery, mobile layout.
 4. **Architecture / build** — this scaffold (done); next: worker-thread
    evaluation for heavy generators, snapshot/versioning, plugin loading.
 
