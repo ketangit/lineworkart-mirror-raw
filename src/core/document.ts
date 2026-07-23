@@ -77,6 +77,17 @@ export function createDocument(generatorId: string, page = PAGE_SIZES.a4!): Docu
   return { page, layers: [createLayer(generatorId)] };
 }
 
+/** Deep-clone a layer (new id, independent params + modifier chain). */
+export function duplicateLayer(layer: Layer): Layer {
+  return {
+    ...layer,
+    id: nextId("layer"),
+    name: `${layer.name} copy`,
+    params: { ...layer.params },
+    modifiers: layer.modifiers.map((m) => ({ ...m, params: { ...m.params } })),
+  };
+}
+
 export function addModifier(layer: Layer, modifierId: string): void {
   const mod = getModifier(modifierId);
   if (!mod) throw new Error(`Unknown modifier "${modifierId}"`);
