@@ -20,6 +20,7 @@ import {
   createLayer,
   duplicateLayer,
   evaluateDocument,
+  penGroups,
   PAGE_SIZES,
   type Document,
   type Layer,
@@ -28,7 +29,7 @@ import { metrics } from "./core/geometry";
 import { History } from "./core/history";
 import { renderInto, fitScale } from "./core/renderer";
 import { toSVG } from "./core/export/svg";
-import { toGcode, optimizeOrder, GCODE_PROFILES } from "./core/export/gcode";
+import { toGcodePens, optimizeOrder, GCODE_PROFILES } from "./core/export/gcode";
 import { buildFields } from "./ui/controls";
 
 registerGenerators();
@@ -79,8 +80,22 @@ app.innerHTML = `
       <div class="stat"><span class="stat__key">Layers</span><span class="stat__val" id="s-layers">—</span></div>
       <div class="stat"><span class="stat__key">Paths</span><span class="stat__val" id="s-paths">—</span></div>
       <div class="stat"><span class="stat__key">Samples</span><span class="stat__val" id="s-samples">—</span></div>
+      <div class="stat"><span class="stat__key">Pens</span><span class="stat__val" id="s-pens">—</span></div>
       <div class="stat"><span class="stat__key">Pen-ups</span><span class="stat__val" id="s-penups">—</span></div>
       <div class="stat"><span class="stat__key">Length</span><span class="stat__val" id="s-length">—</span></div>
+
+      <div class="panel__title" style="margin:18px 0 10px">Output</div>
+      <label class="field">
+        <span class="field__label">Device</span>
+        <select id="device"></select>
+      </label>
+      <label class="field field--checkbox">
+        <div class="field__row"><input type="checkbox" id="opt-optimize" checked><span class="field__label">Optimize path order</span></div>
+      </label>
+      <label class="field field--checkbox">
+        <div class="field__row"><input type="checkbox" id="opt-pause" checked><span class="field__label">Pause between pens</span></div>
+      </label>
+
       <div class="export-row">
         <button class="btn btn--block" id="export-svg">Export SVG</button>
         <button class="btn btn--block" id="export-gcode">Export G-code</button>
@@ -157,6 +172,7 @@ function updateHistoryButtons(): void {
 function addLayer(): void {
   const layer = createLayer(active.generatorId);
   layer.strokeColor = LAYER_PALETTE[doc.layers.length % LAYER_PALETTE.length]!;
+  layer.pen = doc.layers.length + 1; // new layers default to a fresh pen
   doc.layers.push(layer);
   active = layer;
   rebuildControls();
@@ -266,7 +282,7 @@ function buildLayerPanel(): HTMLElement {
     const meta = document.createElement("span");
     meta.className = "layer-row__meta";
     const modCount = layer.modifiers.length;
-    meta.textContent = `${gen?.name ?? "?"}${modCount ? ` · ${modCount} mod` : ""}`;
+    meta.textContent = `pen ${layer.pen} · ${gen?.name ?? "?"}${modCount ? ` · ${modCount} mod` : ""}`;
     label.append(name, meta);
     label.addEventListener("click", () => selectLayer(layer));
 
@@ -377,6 +393,26 @@ function rebuildControls(): void {
     scheduleCommit();
   });
 
+  // Pen assignment (maps this layer to a plotter pen/tool)
+  const penField = document.createElement("label");
+  penField.className = "field";
+  penField.innerHTML = `<span class="field__label">Pen</span>`;
+  const penInput = document.createElement("input");
+  penInput.type = "number";
+  penInput.min = "1";
+  penInput.max = "12";
+  penInput.step = "1";
+  penInput.value = String(active.pen);
+  penInput.addEventListener("change", () => {
+    active.pen = Math.max(1, Math.round(Number(penInput.value) || 1));
+    penInput.value = String(active.pen);
+    rebuildControls();
+    recompute();
+    commit();
+  });
+  penField.append(penInput);
+  activeWrap.append(penField);
+
   // Modifier chain
   activeWrap.append(sectionTitle("Modifiers"));
   const modRow = document.createElement("div");
@@ -451,12 +487,8 @@ function sectionTitle(text: string): HTMLElement {
 
 // ---- Recompute + render ------------------------------------------------
 
-let lastEvaluated: ReturnType<typeof evaluateDocument> = [];
-
 function recompute(): void {
   const evaluated = evaluateDocument(doc);
-  lastEvaluated = evaluated;
-
   const stage = paper.parentElement!;
   const pxPerMm = fitScale(doc.page, {
     width: stage.clientWidth,
@@ -468,6 +500,7 @@ function recompute(): void {
   const m = metrics(all);
   text("s-size", `${doc.page.width} × ${doc.page.height} mm`);
   text("s-layers", `${evaluated.length} / ${doc.layers.length}`);
+  text("s-pens", String(penGroups(evaluated).length));
   text("s-paths", m.paths.toLocaleString());
   text("s-samples", m.samples.toLocaleString());
   text("s-penups", m.penUps.toLocaleString());
@@ -515,14 +548,32 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+// Populate the device picker from the available G-code profiles.
+const deviceSelect = document.getElementById("device") as HTMLSelectElement;
+for (const [id, profile] of Object.entries(GCODE_PROFILES)) {
+  const o = document.createElement("option");
+  o.value = id;
+  o.textContent = profile.name;
+  deviceSelect.append(o);
+}
+
+const isChecked = (id: string): boolean => (document.getElementById(id) as HTMLInputElement).checked;
+
 document.getElementById("export-svg")!.addEventListener("click", () => {
   const svg = toSVG(evaluateDocument(doc), doc.page, { pageBorder: true });
   download("lineandform.svg", svg, "image/svg+xml");
 });
 
 document.getElementById("export-gcode")!.addEventListener("click", () => {
-  const all = lastEvaluated.flatMap((e) => e.paths);
-  const gcode = toGcode(all, GCODE_PROFILES.servo!, { optimize: true });
+  const profile = GCODE_PROFILES[deviceSelect.value] ?? GCODE_PROFILES.servo!;
+  const groups = penGroups(evaluateDocument(doc)).map((g) => ({
+    pen: g.pen,
+    paths: g.layers.flatMap((l) => l.paths),
+  }));
+  const gcode = toGcodePens(groups, profile, {
+    optimize: isChecked("opt-optimize"),
+    penPause: isChecked("opt-pause"),
+  });
   download("lineandform.gcode", gcode, "text/plain");
 });
 
