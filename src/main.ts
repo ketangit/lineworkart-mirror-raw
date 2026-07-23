@@ -25,6 +25,7 @@ import {
   type Layer,
 } from "./core/document";
 import { metrics } from "./core/geometry";
+import { History } from "./core/history";
 import { renderInto, fitScale } from "./core/renderer";
 import { toSVG } from "./core/export/svg";
 import { toGcode, optimizeOrder, GCODE_PROFILES } from "./core/export/gcode";
@@ -52,6 +53,8 @@ app.innerHTML = `
     <div class="verbs">
       <button class="btn btn--primary" id="make">＋ Make</button>
       <button class="btn" id="randomize">Randomize</button>
+      <button class="btn btn--icon" id="undo" title="Undo (⌘Z)" aria-label="Undo" disabled>↶</button>
+      <button class="btn btn--icon" id="redo" title="Redo (⌘⇧Z)" aria-label="Redo" disabled>↷</button>
     </div>
     <div class="panel__body" id="controls-body"></div>
   </aside>
@@ -89,6 +92,66 @@ app.innerHTML = `
 const paper = document.getElementById("paper")!;
 const controlsBody = document.getElementById("controls-body")!;
 
+// ---- History (undo/redo) ----------------------------------------------
+
+/** Serialize the whole editable state, including which layer is active. */
+function snapshot(): string {
+  return JSON.stringify({ page: doc.page, layers: doc.layers, activeId: active.id });
+}
+
+const history = new History<string>(snapshot());
+let pendingCommit: ReturnType<typeof setTimeout> | null = null;
+
+/** Record the current state immediately (for discrete edits). */
+function commit(): void {
+  if (pendingCommit) {
+    clearTimeout(pendingCommit);
+    pendingCommit = null;
+  }
+  const s = snapshot();
+  if (s !== history.current) history.push(s);
+  updateHistoryButtons();
+}
+
+/** Record after a short idle — coalesces slider/colour drags into one step. */
+function scheduleCommit(): void {
+  if (pendingCommit) clearTimeout(pendingCommit);
+  pendingCommit = setTimeout(() => {
+    pendingCommit = null;
+    commit();
+  }, 350);
+}
+
+function restore(state: string): void {
+  const parsed = JSON.parse(state) as {
+    page: Document["page"];
+    layers: Layer[];
+    activeId: string;
+  };
+  doc.page = parsed.page;
+  doc.layers = parsed.layers;
+  active = doc.layers.find((l) => l.id === parsed.activeId) ?? doc.layers[0]!;
+  rebuildControls();
+  recompute();
+  updateHistoryButtons();
+}
+
+function undo(): void {
+  commit(); // flush any pending drag before stepping back
+  const state = history.undo();
+  if (state !== null) restore(state);
+}
+
+function redo(): void {
+  const state = history.redo();
+  if (state !== null) restore(state);
+}
+
+function updateHistoryButtons(): void {
+  (document.getElementById("undo") as HTMLButtonElement).disabled = !history.canUndo;
+  (document.getElementById("redo") as HTMLButtonElement).disabled = !history.canRedo;
+}
+
 // ---- Layer operations --------------------------------------------------
 
 function addLayer(): void {
@@ -98,6 +161,7 @@ function addLayer(): void {
   active = layer;
   rebuildControls();
   recompute();
+  commit();
 }
 
 function selectLayer(layer: Layer): void {
@@ -113,6 +177,7 @@ function duplicate(layer: Layer): void {
   active = clone;
   rebuildControls();
   recompute();
+  commit();
 }
 
 function removeLayer(layer: Layer): void {
@@ -122,6 +187,7 @@ function removeLayer(layer: Layer): void {
   if (active === layer) active = doc.layers[Math.max(0, at - 1)]!;
   rebuildControls();
   recompute();
+  commit();
 }
 
 /** delta -1 = toward top of the visual list (later in draw order). */
@@ -133,6 +199,7 @@ function moveLayer(layer: Layer, delta: number): void {
   doc.layers.splice(target, 0, item!);
   rebuildControls();
   recompute();
+  commit();
 }
 
 // ---- Layer panel -------------------------------------------------------
@@ -176,6 +243,7 @@ function buildLayerPanel(): HTMLElement {
       layer.visible = !layer.visible;
       rebuildControls();
       recompute();
+      commit();
     });
 
     const lock = iconButton(layer.locked ? "▣" : "▢", layer.locked ? "Unlock" : "Lock", layer.locked);
@@ -183,6 +251,7 @@ function buildLayerPanel(): HTMLElement {
       e.stopPropagation();
       layer.locked = !layer.locked;
       rebuildControls();
+      commit();
     });
 
     const swatch = document.createElement("span");
@@ -264,6 +333,7 @@ function rebuildControls(): void {
     active.name = gen.name;
     rebuildControls();
     recompute();
+    commit();
   });
   shapeField.append(shapeSelect);
   activeWrap.append(shapeField);
@@ -271,7 +341,12 @@ function rebuildControls(): void {
   // Generator params
   const gen = getGenerator(active.generatorId)!;
   activeWrap.append(sectionTitle(gen.name));
-  activeWrap.append(buildFields(gen.fields, active.params, () => recompute()));
+  activeWrap.append(
+    buildFields(gen.fields, active.params, () => {
+      recompute();
+      scheduleCommit();
+    }),
+  );
 
   // Stroke styling
   activeWrap.append(sectionTitle("Stroke"));
@@ -287,8 +362,11 @@ function rebuildControls(): void {
   activeWrap.append(stroke);
   stroke.querySelector<HTMLInputElement>("#stroke-color")!.addEventListener("input", (e) => {
     active.strokeColor = (e.target as HTMLInputElement).value;
-    rebuildControls();
+    // Update just the layer-row swatch live without rebuilding the picker.
+    const swatchEl = controlsBody.querySelector<HTMLElement>(".layer-row--active .layer-row__swatch");
+    if (swatchEl) swatchEl.style.background = active.strokeColor;
     recompute();
+    scheduleCommit();
   });
   const swInput = stroke.querySelector<HTMLInputElement>("#stroke-width")!;
   const swVal = stroke.querySelector<HTMLSpanElement>("#stroke-width-val")!;
@@ -296,6 +374,7 @@ function rebuildControls(): void {
     active.strokeWidth = Number(swInput.value);
     swVal.textContent = active.strokeWidth.toFixed(2);
     recompute();
+    scheduleCommit();
   });
 
   // Modifier chain
@@ -317,6 +396,7 @@ function rebuildControls(): void {
     active.modifiers.push({ modifierId: mod.id, params: defaultParams(mod.fields), enabled: true });
     rebuildControls();
     recompute();
+    commit();
   });
   modRow.append(modSelect, addBtn);
   activeWrap.append(modRow);
@@ -337,10 +417,16 @@ function rebuildControls(): void {
       active.modifiers.splice(i, 1);
       rebuildControls();
       recompute();
+      commit();
     });
     groupHead.append(remove);
     group.append(groupHead);
-    group.append(buildFields(mod.fields, inst.params, () => recompute()));
+    group.append(
+      buildFields(mod.fields, inst.params, () => {
+        recompute();
+        scheduleCommit();
+      }),
+    );
     activeWrap.append(group);
   });
 
@@ -410,6 +496,23 @@ document.getElementById("randomize")!.addEventListener("click", () => {
   }
   rebuildControls();
   recompute();
+  commit();
+});
+
+document.getElementById("undo")!.addEventListener("click", undo);
+document.getElementById("redo")!.addEventListener("click", redo);
+
+window.addEventListener("keydown", (e) => {
+  const mod = e.metaKey || e.ctrlKey;
+  if (!mod) return;
+  const key = e.key.toLowerCase();
+  if (key === "z" && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+  } else if ((key === "z" && e.shiftKey) || key === "y") {
+    e.preventDefault();
+    redo();
+  }
 });
 
 document.getElementById("export-svg")!.addEventListener("click", () => {
@@ -437,6 +540,7 @@ function download(filename: string, content: string, mime: string): void {
 
 rebuildControls();
 recompute();
+updateHistoryButtons();
 
 const ro = new ResizeObserver(() => recompute());
 ro.observe(paper.parentElement!);
