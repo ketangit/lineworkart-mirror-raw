@@ -43,8 +43,9 @@ generator ─▶ PathSet ─▶ modifier… ─▶ PathSet ─▶ ┬─▶ rend
 | Registry | `src/core/registry.ts` | Generator/modifier registration + **field schema** |
 | Document | `src/core/document.ts` | Page + layer stack, lazy evaluation, per-layer pen |
 | History | `src/core/history.ts` | Generic undo/redo stack (editor stores document snapshots) |
+| Path-merge | `src/core/path-merge.ts` | Join touching strokes + drop collinear points to cut pen-ups |
 | Renderer | `src/core/renderer.ts` | `PathSet` → live `<svg>` with a mm `viewBox` |
-| Export | `src/core/export/svg.ts`, `gcode.ts` | Per-pen SVG layers; multi-pen G-code with device profiles + travel optimisation |
+| Export | `src/core/export/svg.ts`, `gcode.ts`, `hpgl.ts` | Per-pen SVG layers; multi-pen G-code + HPGL; device profiles, path-order optimisation, path-merge |
 | Generators | `src/generators/*` | `spirograph`, `rose`, `flow-field`, `truchet`, `halftone`, `text-path` |
 | Modifiers | `src/modifiers/*` | `jitter`, `dash`, `warp` |
 | UI | `src/ui/*`, `src/main.ts` | Three-column shell; layer panel; undo/redo; controls auto-built from field schemas |
@@ -85,7 +86,8 @@ Four active tracks:
    warp (done); next: 3D projection; boolean-clip and offset modifiers.
 2. **Export & device output** — device profiles (servo / Z-hop / GRBL),
    per-layer pen mapping, multi-pen G-code with pause-between-pens, per-pen SVG
-   layers (done); next: HPGL, path-merge to further cut pen-ups.
+   layers, HPGL export, path-merge to cut pen-ups (done); next: per-pen
+   speed/pressure, plot-time estimate.
 3. **UX / design polish** — layer panel, undo/redo (coalesced) with ⌘Z/⌘⇧Z
    (done); next: gallery, mobile-tuned layout, snapshots.
 4. **Architecture / build** — this scaffold (done); next: worker-thread
