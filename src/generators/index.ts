@@ -6,6 +6,7 @@ import { rose } from "./rose";
 import { flowField } from "./flow-field";
 import { truchet } from "./truchet";
 import { halftone } from "./halftone";
+import { textPath } from "./text-path";
 
 export function registerGenerators(): void {
   registerGenerator(spirograph);
@@ -13,4 +14,5 @@ export function registerGenerators(): void {
   registerGenerator(flowField);
   registerGenerator(truchet);
   registerGenerator(halftone);
+  registerGenerator(textPath);
 }
